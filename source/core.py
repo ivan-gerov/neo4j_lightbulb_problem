@@ -67,10 +67,10 @@ class EnergyConsumptionLogger:
 
         if not match_obj:
             return
-        
+
         m_groups = match_obj.groups()
 
-        timestamp = datetime.fromtimestamp(float(m_groups[0]))    
+        timestamp = datetime.fromtimestamp(float(m_groups[0]))
 
         if "TurnOff" in raw_energy_log:
             energy_log = EnergyConsumptionLog(timestamp=timestamp, turned_on=False)
@@ -90,6 +90,44 @@ class EnergyConsumptionLogger:
             self._energy_consumption_logs[timestamp]
             for timestamp in sorted(self._energy_consumption_logs.keys())
         ]
+
+
+class EnergyConsumer:
+    """
+    A class that represents an energy consumer. This could be
+    a lightbulb or some other kind of energy consumer.
+
+    Attributes:
+        `kind : str`
+            The kind of energy consumer - e.g. "lightbulb".\n
+        `max_consumption : float`
+            Max possible consumption of the energy consumer in Watts. It must be a positive value\n
+        `current_consumption : float`
+            The current consumption of the energy consumer - value between 0 (0% of max_consumption) and 1 (100% of max_consumption).\n
+        `energy_consumption_logger : EnergyConsumptionLogger`
+            Used to log energy consumption for the consumer.
+    """
+
+    def __init__(self, kind: str, max_consumption: float):
+        if max_consumption < 0:
+            raise ValueError(
+                f"Max consumption should be a positive value! max_consumption:{max_consumption}"
+            )
+
+        self.kind = kind
+        self.max_consumption = max_consumption
+        self.current_consumption = 1
+        self.energy_consumption_logger = EnergyConsumptionLogger()
+
+    def set_consumption(self, delta_change: float):
+        """Sets the current energy consumption for the energy consumer by
+        passing a delta change augment the current value."""
+        if delta_change < 0:
+            self.current_consumption = max(0, self.current_consumption + delta_change)
+        elif delta_change > 0:
+            self.current_consumption = min(1, self.current_consumption + delta_change)
+        else:
+            self.current_consumption = 0
 
 
 # class EnergyEstimator:

@@ -2,7 +2,7 @@ from datetime import datetime
 
 import unittest
 
-from core import EnergyConsumptionLog, EnergyConsumptionLogger
+from core import EnergyConsumptionLog, EnergyConsumptionLogger, EnergyConsumer
 
 
 class TestEnergyConsumptionLog(unittest.TestCase):
@@ -134,6 +134,51 @@ class TestEnergyConsumptionLogger(unittest.TestCase):
             ],
         )
 
+
+class TestEnergyConsumer(unittest.TestCase):
+    def test_create_energy_consumer(self):
+        """Tests that an energy consumer is created, all fields work as intended
+        and one can access and add energy logs via the energy_consumption_logger."""
+        lightbulb = EnergyConsumer(kind="lightbulb", max_consumption=5)
+        self.assertEqual(lightbulb.kind, "lightbulb")
+        self.assertEqual(lightbulb.current_consumption, 1)
+        self.assertEqual(lightbulb.max_consumption, 5)
+        self.assertEqual(lightbulb.energy_consumption_logger.get_logs(), [])
+
+        # Add an energy consumption log
+        lightbulb.energy_consumption_logger.add_log("1544206563 Delta +0.5")
+        self.assertEqual(
+            str(lightbulb.energy_consumption_logger.get_logs()[0]), "1544206563.0:0.5"
+        )
+        
+    def test_create_energy_consumer_invalid_max_consumption(self):
+        """Tests that max_consumption must be a positive value."""
+        with self.assertRaises(ValueError) as cm:
+            lightbulb = EnergyConsumer(kind="lightbul", max_consumption=-5123123)
+        self.assertEqual(str(cm.exception), 'Max consumption should be a positive value! max_consumption:-5123123')
+
+    def test_set_consumption(self):
+        """Tests that consumption can be set for the energy consumer based
+        on a delta change (e.g. dimmer on a lightswitch). Also, assert
+        that the minimum possible value is 0 and the maximum - the max_consumption
+        of the energy consumer."""
+        lightbulb = EnergyConsumer(kind="lightbulb", max_consumption=5)
+        
+        lightbulb.set_consumption(1)
+        self.assertEqual(lightbulb.current_consumption, 1)
+        
+        lightbulb.set_consumption(-0.75)
+        self.assertEqual(lightbulb.current_consumption, 0.25)
+        
+        lightbulb.set_consumption(-1.1525)
+        self.assertEqual(lightbulb.current_consumption, 0)
+        
+        lightbulb.set_consumption(0)
+        self.assertEqual(lightbulb.current_consumption, 0)
+        
+        lightbulb.set_consumption(5125)
+        self.assertEqual(lightbulb.current_consumption, 1)
+    
 
 if __name__ == "__main__":
     unittest.main()
