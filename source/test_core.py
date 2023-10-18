@@ -2,7 +2,12 @@ from datetime import datetime
 
 import unittest
 
-from core import EnergyConsumptionLog, EnergyConsumptionLogger, EnergyConsumer
+from core import (
+    EnergyConsumptionLog,
+    EnergyConsumptionLogger,
+    EnergyConsumer,
+    EnergyEstimator,
+)
 
 
 class TestEnergyConsumptionLog(unittest.TestCase):
@@ -150,12 +155,15 @@ class TestEnergyConsumer(unittest.TestCase):
         self.assertEqual(
             str(lightbulb.energy_consumption_logger.get_logs()[0]), "1544206563.0:0.5"
         )
-        
+
     def test_create_energy_consumer_invalid_max_consumption(self):
         """Tests that max_consumption must be a positive value."""
         with self.assertRaises(ValueError) as cm:
             lightbulb = EnergyConsumer(kind="lightbul", max_consumption=-5123123)
-        self.assertEqual(str(cm.exception), 'Max consumption should be a positive value! max_consumption:-5123123')
+        self.assertEqual(
+            str(cm.exception),
+            "Max consumption should be a positive value! max_consumption:-5123123",
+        )
 
     def test_set_consumption(self):
         """Tests that consumption can be set for the energy consumer based
@@ -163,22 +171,80 @@ class TestEnergyConsumer(unittest.TestCase):
         that the minimum possible value is 0 and the maximum - the max_consumption
         of the energy consumer."""
         lightbulb = EnergyConsumer(kind="lightbulb", max_consumption=5)
-        
+
         lightbulb.set_consumption(1)
         self.assertEqual(lightbulb.current_consumption, 1)
-        
+
         lightbulb.set_consumption(-0.75)
         self.assertEqual(lightbulb.current_consumption, 0.25)
-        
+
         lightbulb.set_consumption(-1.1525)
         self.assertEqual(lightbulb.current_consumption, 0)
-        
+
         lightbulb.set_consumption(0)
         self.assertEqual(lightbulb.current_consumption, 0)
-        
+
         lightbulb.set_consumption(5125)
         self.assertEqual(lightbulb.current_consumption, 1)
-    
+
+
+class TestEnergyEstimator(unittest.TestCase):
+    def test_estimate_energy(self):
+        """Tests that given a sequence of raw energy logs, an
+        energy consumer can log those and then the estimator
+        can estimate the energe used by the consumer."""
+        energy_estimator = EnergyEstimator()
+
+        lightbulb1 = EnergyConsumer(kind="lightbulb", max_consumption=5)
+        lightbulb1.energy_consumption_logger.batch_add_logs(
+            [
+                "1544206562 TurnOff",
+                "1544206563 Delta +0.5",
+                "1544210163 TurnOff",
+            ]
+        )
+        estimated_energy = energy_estimator.estimate_energy(lightbulb1)
+        self.assertEqual(estimated_energy, 2.5)
+
+        lightbulb2 = EnergyConsumer(kind="lightbulb", max_consumption=5)
+        lightbulb2.energy_consumption_logger.batch_add_logs(
+            [
+                "1544206562 TurnOff",
+                "1544206563 Delta +0.5",
+                "1544210163 Delta -0.25",
+                "1544210163 Delta -0.25",
+                "1544211963 Delta +0.75",
+                "1544213763 TurnOff",
+            ]
+        )
+        estimated_energy = energy_estimator.estimate_energy(lightbulb2)
+        self.assertEqual(estimated_energy, 5.625)
+
+    def test_estimate_energy_invalid_logs(self):
+        """Tests that the energy estimator can handle invalid logs"""
+        energy_estimator = EnergyEstimator()
+
+        lightbulb = EnergyConsumer(kind="lightbulb", max_consumption=5)
+        lightbulb.energy_consumption_logger.batch_add_logs(
+            [
+                "1544206562 TurnOff",
+                "1544206563 TurnedOff",
+                "1544210163 TurnOff",
+            ]
+        )
+        estimated_energy = energy_estimator.estimate_energy(lightbulb)
+        self.assertEqual(estimated_energy, 0.0)
+        lightbulb.energy_consumption_logger._energy_consumption_logs = dict()
+
+        lightbulb.energy_consumption_logger.batch_add_logs(
+            [
+                "1544206562 TurnOff",
+                "1544210163 Delta -0.25",
+            ]
+        )
+        estimated_energy = energy_estimator.estimate_energy(lightbulb)
+        self.assertEqual(estimated_energy, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

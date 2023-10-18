@@ -44,7 +44,7 @@ class EnergyConsumptionLogger:
     """
 
     ENERGY_LOG_REGEX: re.Pattern = re.compile(
-        r"([0-9]{,10})\s+(TurnOff|(Delta\s+([+-](?:\d+\.\d+|\d+))))"
+        r"(?:[>]\s)?([0-9]{,10})\s+(TurnOff|(Delta\s+([+-](?:\d+\.\d+|\d+))))"
     )
 
     def __init__(self):
@@ -57,6 +57,10 @@ class EnergyConsumptionLogger:
             return
 
         self._energy_consumption_logs.update(processed_energy_log)
+
+    def batch_add_logs(self, raw_energy_logs: List[str]):
+        for raw_energy_log in raw_energy_logs:
+            self.add_log(raw_energy_log)
 
     def _process_energy_log(
         self, raw_energy_log: str
@@ -130,27 +134,51 @@ class EnergyConsumer:
             self.current_consumption = 0
 
 
-# class EnergyEstimator:
-#     """A class that estimates the energy used by an energy consumator in
-#     the course of a sequence of enery logs."""
+class EnergyEstimator:
+    """A class that estimates the energy used by an energy consumator in
+    the course of a sequence of enery logs."""
 
-#     def estimate_energy(self, energy_logs: List[EnergyConsumptionLog]) -> float:
-#         total_energy_estimate = 0
+    def estimate_energy(self, energy_consumer: EnergyConsumer) -> float:
+        energy_logs = energy_consumer.energy_consumption_logger.get_logs()
 
-#         current_expendature = 0
+        total_energy_estimate = 0
 
-#         next_ = 0
-#         for energy_log in energy_logs:
-#             if next_ > len(energy_logs):
-#                 break
+        for current_log in range(len(energy_logs)):
+            next_log = current_log + 1
+            if next_log > len(energy_logs) - 1:
+                break
 
-#             time_elapsed_between_logs_secs = (
-#                 energy_logs[next_].timestamp - energy_log.timestamp
-#             )
+            hours_elapsed_between_logs = (
+                (
+                    energy_logs[next_log].timestamp - energy_logs[current_log].timestamp
+                ).total_seconds()
+                / 60
+                / 60
+            )
 
-#             current_expendature = max(
-#                 0, current_expendature + energy_log.delta_consumption
-#             )
-#             total_energy_estimate = max(
-#                 0, (time_elapsed_between_logs_secs / 60 / 60) * current_expendature
-#             )
+            energy_consumer.set_consumption(energy_logs[current_log].delta_consumption)
+
+            consumption_between_logs = hours_elapsed_between_logs * (
+                energy_consumer.current_consumption * energy_consumer.max_consumption
+            )
+
+            total_energy_estimate += consumption_between_logs
+
+        return total_energy_estimate
+
+
+if __name__ == "__main__":
+    lightbulb = EnergyConsumer(kind="lightbulb", max_consumption=5)
+    energy_estimator = EnergyEstimator()
+
+    try:
+        while True:
+            line = input()
+            if "EOF" in line:
+                break
+            lightbulb.energy_consumption_logger.add_log(line)
+    except EOFError:
+        pass  # Handle Ctrl-D, etc.
+
+    estimated_energy = energy_estimator.estimate_energy(lightbulb)
+    print(f"Estimated energy used: {estimated_energy} Wh")
